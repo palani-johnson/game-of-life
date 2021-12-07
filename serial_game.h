@@ -13,7 +13,7 @@ struct GameOfLife {
 };
 
 #define use_game_pos(l) int _w2 = l->width+2; int _w3 = l->width+3
-#define game_pos(i, j) (j*_w2 + _w3 + i)
+#define game_pos(i, j) ((j)*_w2 + _w3 + (i))
 
 void init_life(
     struct GameOfLife *life,

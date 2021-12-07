@@ -1,14 +1,19 @@
-/* File:     serial-game.c
+/* File:     serial_game.c
  *
  * Compile:  gcc -g -Wall -o game serial-game.c
- * Run:      ./game [input_file] [board_width] [board_height] [start_x] [start_y] [iterations]
- *
- * Compile Run and Process:
- *      gcc -g -o game serial-game.c && ./game rand 3840 2160 100 30 60 | mpv --no-correct-pts --fps=1 -
+ * Run:      ./game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
+ * Examples: 
+ *      Gen 500x500 game board with seed 50 and fill 50 and save as game.ppm:
+ *           ./game rand 500 500 10 50 600 > game.ppm
+ *     
+ *      View ppm:
+ *           mpv --no-correct-pts --fps=10 game.ppm
+ *      
+ *      Stream game with pipe into mpv:
+ *          ./game rand 500 500 10 50 600 | mpv --no-correct-pts --fps=10 -
  */
-
-#include "game.h"
+#include "serial_game.h"
 
 
 int main(int argc, char** argv) {
@@ -20,7 +25,7 @@ int main(int argc, char** argv) {
         // );
         fprintf(
             stderr, 
-            "usage:  %s [random|rand|r] [board_width] [board_height] [seed] [fill] [iterations]\n", 
+            "usage:  %s [random|rand] [board_width] [board_height] [seed] [fill] [iterations]\n", 
             argv[0]
         );
         exit(EXIT_FAILURE);
@@ -73,12 +78,10 @@ void init_life(
     life->buff_size = (life->width + 2) * (life->height + 2);
 
     life->next_buff = malloc(life->buff_size * sizeof(bool));
-    life->buff = strcmp(init_type, "random") 
-            || strcmp(init_type, "random") 
-            || strcmp(init_type, "r")
+    life->buff = strcmp(init_type, "random") || strcmp(init_type, "rand")
         ? alloc_random_buff(life, op1, op2)
         : alloc_buff_from_file(life, init_type, op1, op2);
-    make_torus(life);
+    //make_torus(life);
 }
 
 void make_torus(struct GameOfLife *life) {
@@ -106,14 +109,21 @@ void make_torus(struct GameOfLife *life) {
 
 bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill) {
     use_game_pos(life);
-    srand(seed);
+    bool *buff;
 
-    bool *buff = malloc(life->buff_size * sizeof(bool));
-    for (int i = 0; i < life->width; i++) 
-        for (int j = 0; j < life->height; j++)
-            buff[game_pos(i, j)] = (rand() / (double)RAND_MAX) 
-                < (double)fill / 100;
-    
+    if (seed == -1) {
+        buff = calloc(life->buff_size, sizeof(bool));
+        for (int i = 0; i < 3; i++) 
+            buff[game_pos(i, 1)] = 1;
+    } else {
+        srand(seed);
+        buff = malloc(life->buff_size * sizeof(bool));
+        for (int j = 0; j < life->height; j++) 
+            for (int i = 0; i < life->width; i++)
+                buff[game_pos(i, j)] = (rand() / (double)RAND_MAX) 
+                    < (double)fill / 100;
+    }
+
     return buff;
 }
 
@@ -127,9 +137,9 @@ void ppm_write(struct GameOfLife *life, FILE *f) {
     use_game_pos(life);
 
     fprintf(f, "P6\n%d %d 255\n", life->width, life->height);
-    for (int w = 0; w < life->width; w++) {
-        for (int h = 0; h < life->height; h++) {
-            int b = life->buff[game_pos(w, h)] ? 0 : 200;
+    for (int j = 0; j < life->height; j++) {
+        for (int i = 0; i < life->width; i++) {
+            char b = life->buff[game_pos(i, j)] ? 0 : 255;
             fprintf(f, "%c%c%c", b, b, b);
         }
     }
@@ -142,14 +152,14 @@ void gen_next_buff(struct GameOfLife *life) {
     use_game_pos(life);
     int i, j, w, h, sum, p;
 
-    for (w = 0; w < life->width; w++) {
-        for (h = 0; h < life->height; h++) {
+    for (j = 0; j < life->height; j++) {
+        for (i = 0; i < life->width; i++) {
             sum = 0;
-            for (i = -1; i <= 1; i++)
-                for (j = -1; j <= 1; j++) 
-                    if (life->buff[game_pos(w+i, h+j)]) sum++;
-
-            p = game_pos(w, h);
+            for (h = j-1; h <= j+1; h++)
+                for (w = i-1; w <= i+1; w++) 
+                    if (life->buff[game_pos(w, h)]) sum++;
+            
+            p = game_pos(i, j);
             life->next_buff[p] = sum == 3 || (life->buff[p] && sum == 4);
         }
     }
