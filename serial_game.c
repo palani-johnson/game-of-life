@@ -81,7 +81,7 @@ void init_life(
     life->buff = strcmp(init_type, "random") || strcmp(init_type, "rand")
         ? alloc_random_buff(life, op1, op2)
         : alloc_buff_from_file(life, init_type, op1, op2);
-    //make_torus(life);
+    make_torus(life);
 }
 
 void make_torus(struct GameOfLife *life) {
