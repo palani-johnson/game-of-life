@@ -55,6 +55,7 @@ int main(int argc, char** argv) {
 }
 
 // UTILITY
+
 char *get_filename_ext(char *filename) {
     char *dot = strrchr(filename, '.');
     if(!dot || dot == filename) {
@@ -65,14 +66,9 @@ char *get_filename_ext(char *filename) {
 }
 
 // LIFE FUNCTIONS
-void init_life(
-    struct GameOfLife *life,
-    char *init_type, 
-    int width, 
-    int height, 
-    int op1, 
-    int op2
-) {
+
+// Fills a life struct with useful data
+void init_life(struct GameOfLife *life, char *init_type, int width, int height, int op1, int op2) {
     life->width = width;
     life->height = height;
     life->buff_size = (life->width + 2) * (life->height + 2);
@@ -84,6 +80,8 @@ void init_life(
     make_torus(life);
 }
 
+// Copies data into the extra space of a life buffer so that
+// it has the topology of a torus
 void make_torus(struct GameOfLife *life) {
     use_game_pos(life);
 
@@ -107,6 +105,7 @@ void make_torus(struct GameOfLife *life) {
     life->buff[bm1 - (life->width + 1)] = life->buff[game_pos(wm1, 0)];
 }
 
+// Allocates random data to a life struct buffer
 bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill) {
     use_game_pos(life);
     bool *buff;
@@ -127,27 +126,13 @@ bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill) {
     return buff;
 }
 
+// TODO: Make this function
 bool *alloc_buff_from_file(struct GameOfLife *life, char *file, int seed, int fill) {
     bool *buff = calloc(life->buff_size, sizeof(bool));
     return buff;
 }
 
-
-void ppm_write(struct GameOfLife *life, FILE *f) {
-    use_game_pos(life);
-
-    fprintf(f, "P6\n%d %d 255\n", life->width, life->height);
-    for (int j = 0; j < life->height; j++) {
-        for (int i = 0; i < life->width; i++) {
-            char b = life->buff[game_pos(i, j)] ? 0 : 255;
-            fprintf(f, "%c%c%c", b, b, b);
-        }
-    }
-    
-    fflush(f);
-}
-
-
+// Creates the next buffer in a life struct
 void gen_next_buff(struct GameOfLife *life) {
     use_game_pos(life);
     int i, j, w, h, sum, p;
@@ -165,6 +150,7 @@ void gen_next_buff(struct GameOfLife *life) {
     }
 }
 
+// Make the next buffer the current buffer in a life struct
 void iterate_buff(struct GameOfLife *life) {
     bool *temp_buff = life->buff;
     life->buff = life->next_buff;
@@ -173,7 +159,23 @@ void iterate_buff(struct GameOfLife *life) {
     make_torus(life);
 }   
 
+// Free the buffers in a life struct
 void free_buffs(struct GameOfLife *life) {
     free(life->buff);
     free(life->next_buff);
+}
+
+// Writes the current buffer of a life struct to ppm format
+void ppm_write(struct GameOfLife *life, FILE *f) {
+    use_game_pos(life);
+
+    fprintf(f, "P6\n%d %d 255\n", life->width, life->height);
+    for (int j = 0; j < life->height; j++) {
+        for (int i = 0; i < life->width; i++) {
+            char b = life->buff[game_pos(i, j)] ? 0 : 255;
+            fprintf(f, "%c%c%c", b, b, b);
+        }
+    }
+    
+    fflush(f);
 }
