@@ -8,21 +8,26 @@
     #include <string.h>
 
     struct GameOfLife {
+        // main values for game of life
         int width;
         int height;
         int buff_size;
         bool *buff;
         bool *next_buff;
+
+        // values for the video buffer
+        int vid_buff_size;
+        char *vid_buff;
+
+        // common values used in other functions
+        int _w2;
+        int _w3;
     };
 
-    #define use_game_pos(l) int _w2 = l->width+2; int _w3 = l->width+3
-    #define game_pos(i, j) ((j)*_w2 + _w3 + (i))
+    #define game_pos(l, i, j) ((j)*(l->_w2) + (l->_w3) + (i))
 
     void init_life(struct GameOfLife *life, char *init_type, int width, int height, int op1, int op2);
-    bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill);
-    bool *alloc_buff_from_file(struct GameOfLife *life, char *file, int seed, int fill);
-    void ppm_write(struct GameOfLife *life, FILE *f, char *vid_buff);
+    void ppm_write(struct GameOfLife *life, FILE *f);
     void iterate_buff(struct GameOfLife *life);
     void free_buffs(struct GameOfLife *life);
-    char * alloc_video_buff(struct GameOfLife *life);
 #endif
