@@ -1,6 +1,6 @@
 /* File:     serial_game.c
  *
- * Compile:  gcc -g -Wall -o game serial-game.c
+ * Compile:  gcc -g -Wall -o game game.c serial_game.c
  * Run:      ./game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
  * Examples: 
@@ -13,72 +13,7 @@
  *      Stream game with pipe into mpv:
  *          ./game rand 500 500 10 50 600 | mpv --no-correct-pts --fps=10 -
  */
-#include "serial_game.h"
-
-
-int main(int argc, char** argv) {
-    if (argc != 7) {
-        // fprintf(
-        //     stderr, 
-        //     "usage:  %s [input_file] [board_width] [board_height] [start_x] [start_y] [iterations]\n", 
-        //     argv[0]
-        // );
-        fprintf(
-            stderr, 
-            "usage:  %s [random|rand] [board_width] [board_height] [seed] [fill] [iterations]\n", 
-            argv[0]
-        );
-        exit(EXIT_FAILURE);
-    };
-
-    struct GameOfLife life, *life_pointer;
-
-    init_life(
-        &life,
-        argv[1], 
-        strtol(argv[2], NULL, 10), 
-        strtol(argv[3], NULL, 10),
-        strtol(argv[4], NULL, 10),
-        strtol(argv[5], NULL, 10)
-    );
-    
-    ppm_write(&life, stdout);
-    for (int i = 0; i < strtol(argv[6], NULL, 10); i++) {
-        gen_next_buff(&life);
-        iterate_buff(&life);
-        ppm_write(&life, stdout);
-    }
-
-    free_buffs(&life);
-
-    return EXIT_SUCCESS;
-}
-
-// UTILITY
-
-char *get_filename_ext(char *filename) {
-    char *dot = strrchr(filename, '.');
-    if(!dot || dot == filename) {
-        fprintf(stderr, "Invalid file type. File must be .rle or .cells\n");
-        exit(EXIT_FAILURE);
-    };
-    return dot + 1;
-}
-
-// LIFE FUNCTIONS
-
-// Fills a life struct with useful data
-void init_life(struct GameOfLife *life, char *init_type, int width, int height, int op1, int op2) {
-    life->width = width;
-    life->height = height;
-    life->buff_size = (life->width + 2) * (life->height + 2);
-
-    life->next_buff = malloc(life->buff_size * sizeof(bool));
-    life->buff = strcmp(init_type, "random") || strcmp(init_type, "rand")
-        ? alloc_random_buff(life, op1, op2)
-        : alloc_buff_from_file(life, init_type, op1, op2);
-    make_torus(life);
-}
+#include "game_of_life.h"
 
 // Copies data into the extra space of a life buffer so that
 // it has the topology of a torus
@@ -105,33 +40,6 @@ void make_torus(struct GameOfLife *life) {
     life->buff[bm1 - (life->width + 1)] = life->buff[game_pos(wm1, 0)];
 }
 
-// Allocates random data to a life struct buffer
-bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill) {
-    use_game_pos(life);
-    bool *buff;
-
-    if (seed == -1) {
-        buff = calloc(life->buff_size, sizeof(bool));
-        for (int i = 0; i < 3; i++) 
-            buff[game_pos(i, 1)] = 1;
-    } else {
-        srand(seed);
-        buff = malloc(life->buff_size * sizeof(bool));
-        for (int j = 0; j < life->height; j++) 
-            for (int i = 0; i < life->width; i++)
-                buff[game_pos(i, j)] = (rand() / (double)RAND_MAX) 
-                    < (double)fill / 100;
-    }
-
-    return buff;
-}
-
-// TODO: Make this function
-bool *alloc_buff_from_file(struct GameOfLife *life, char *file, int seed, int fill) {
-    bool *buff = calloc(life->buff_size, sizeof(bool));
-    return buff;
-}
-
 // Creates the next buffer in a life struct
 void gen_next_buff(struct GameOfLife *life) {
     use_game_pos(life);
@@ -150,32 +58,57 @@ void gen_next_buff(struct GameOfLife *life) {
     }
 }
 
-// Make the next buffer the current buffer in a life struct
-void iterate_buff(struct GameOfLife *life) {
-    bool *temp_buff = life->buff;
-    life->buff = life->next_buff;
-    life->next_buff = temp_buff;
-
-    make_torus(life);
-}   
-
-// Free the buffers in a life struct
-void free_buffs(struct GameOfLife *life) {
-    free(life->buff);
-    free(life->next_buff);
-}
-
-// Writes the current buffer of a life struct to ppm format
-void ppm_write(struct GameOfLife *life, FILE *f) {
+void write_video_buffer(struct GameOfLife *life, char *vid_buff) {
     use_game_pos(life);
 
-    fprintf(f, "P6\n%d %d 255\n", life->width, life->height);
-    for (int j = 0; j < life->height; j++) {
-        for (int i = 0; i < life->width; i++) {
-            char b = life->buff[game_pos(i, j)] ? 0 : 255;
-            fprintf(f, "%c%c%c", b, b, b);
+    int i, j, b, c, jh, i3;
+
+    for (j = 0; j < life->height; j++) {
+        jh = j*life->height*3;
+        for (i = 0; i < life->width; i++) {
+            i3 = i*3;
+            b = life->buff[game_pos(i, j)] ? 0 : 255;
+            for(c = 0; c < 3; c++) vid_buff[i3 + jh + c] = b;
         }
     }
-    
-    fflush(f);
+}
+
+int main(int argc, char** argv) {
+    if (argc != 7) {
+        fprintf(
+            stderr, 
+            "usage:  %s [random|rand] [board_width] [board_height] [seed] [fill] [iterations]\n", 
+            argv[0]
+        );
+        exit(EXIT_FAILURE);
+    };
+
+    struct GameOfLife life_struct, *life;
+    life = &life_struct;
+
+    init_life(
+        life,
+        argv[1], 
+        strtol(argv[2], NULL, 10), 
+        strtol(argv[3], NULL, 10),
+        strtol(argv[4], NULL, 10),
+        strtol(argv[5], NULL, 10)
+    );
+
+    char *vid_buff = alloc_video_buff(life);
+
+    write_video_buffer(life, vid_buff);    
+    ppm_write(life, stdout, vid_buff);
+
+    for (int i = 0; i < strtol(argv[6], NULL, 10); i++) {
+        make_torus(life);
+        gen_next_buff(life);
+        iterate_buff(life);
+        write_video_buffer(life, vid_buff);  
+        ppm_write(life, stdout, vid_buff);
+    }
+
+    free_buffs(life);
+
+    return EXIT_SUCCESS;
 }
