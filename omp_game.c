@@ -75,6 +75,8 @@ void omp_write_video_buffer(struct GameOfLife *life) {
 }
 
 int main(int argc, char** argv) {
+    get_env;
+
     if (argc != 8) {
         fprintf(
             stderr, 
@@ -105,10 +107,10 @@ int main(int argc, char** argv) {
         omp_write_video_buffer(life);
 
         #pragma omp single
-        ppm_write(life, stdout);
+        if (DO_IO) ppm_write(life, stdout);
 
         for (int i = 0; i < iterations; i++) {
-            omp_make_torus(life);
+            if (DO_TORIS) omp_make_torus(life);
             omp_gen_next_buff(life);
 
             #pragma omp single
@@ -117,7 +119,7 @@ int main(int argc, char** argv) {
             omp_write_video_buffer(life);
 
             #pragma omp single
-            ppm_write(life, stdout);
+            if (DO_IO) ppm_write(life, stdout);
         }
     }
     

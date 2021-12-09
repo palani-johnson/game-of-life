@@ -106,6 +106,8 @@ void ppm_write_from_cuda(struct GameOfLife *life, struct GameOfLife *cuda_life, 
 }
 
 int main(int argc, char** argv) {
+    get_env;
+
     if (argc != 7) {
         fprintf(
             stderr, 
@@ -143,16 +145,16 @@ int main(int argc, char** argv) {
     cuda_life_d = cuda_init_life(life, cuda_life_h);
 
     cuda_write_video_buffer<<<blocks, threads>>>(cuda_life_d);
-    ppm_write_from_cuda(life, cuda_life_h, stdout);
+    if (DO_IO) ppm_write_from_cuda(life, cuda_life_h, stdout);
 
     for (int i = 0; i < iterations; i++) {
-        //make_torus(cuda_life_h);
+        if (DO_TORIS) make_torus(cuda_life_h);
         cuda_gen_next_buff<<<blocks, threads>>>(cuda_life_d);
         iterate_buff(cuda_life_h);
         cudaMemcpy(cuda_life_d, cuda_life_h, sizeof(GameOfLife), cudaMemcpyHostToDevice);
 
         cuda_write_video_buffer<<<blocks, threads>>>(cuda_life_d); 
-        ppm_write_from_cuda(life, cuda_life_h, stdout);
+        if (DO_IO) ppm_write_from_cuda(life, cuda_life_h, stdout);
     }
 
     return EXIT_SUCCESS;

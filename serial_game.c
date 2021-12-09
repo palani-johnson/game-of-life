@@ -69,6 +69,8 @@ void write_video_buffer(struct GameOfLife *life) {
 }
 
 int main(int argc, char** argv) {
+    get_env;
+
     if (argc != 7) {
         fprintf(
             stderr, 
@@ -93,15 +95,15 @@ int main(int argc, char** argv) {
     int iterations = strtol(argv[6], NULL, 10);
 
     write_video_buffer(life);    
-    ppm_write(life, stdout);
+    if (DO_IO) ppm_write(life, stdout);
 
     for (int i = 0; i < iterations; i++) {
-        make_torus(life);
+        if (DO_TORIS) make_torus(life);
         gen_next_buff(life);
         iterate_buff(life);
 
         write_video_buffer(life);  
-        ppm_write(life, stdout);
+        if (DO_IO) ppm_write(life, stdout);
     }
 
     free_buffs(life);

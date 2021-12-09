@@ -32,14 +32,13 @@ void ppm_write(struct GameOfLife *life, FILE *f) {
 // Allocates random data to a life struct buffer
 bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill) {
     bool *buff;
+    buff = calloc(life->buff_size, sizeof(bool));
 
     if (seed == -1) {
-        buff = calloc(life->buff_size, sizeof(bool));
         for (int i = 0; i < 3; i++) 
             buff[game_pos(life, i, 1)] = 1;
     } else {
         srand(seed);
-        buff = malloc(life->buff_size * sizeof(bool));
         for (int j = 0; j < life->height; j++) 
             for (int i = 0; i < life->width; i++)
                 buff[game_pos(life, i, j)] = (rand() / (double)RAND_MAX) 

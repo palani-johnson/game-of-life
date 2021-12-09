@@ -30,4 +30,10 @@
     void ppm_write(struct GameOfLife *life, FILE *f);
     void iterate_buff(struct GameOfLife *life);
     void free_buffs(struct GameOfLife *life);
+    bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill);
+    bool *alloc_buff_from_file(struct GameOfLife *life, char *file, int seed, int fill);
+
+
+    #define get_env bool DO_TORIS = getenv("GAME_DO_TORIS") != NULL; \
+    bool DO_IO = getenv("GAME_DONT_DO_IO") == NULL;
 #endif
