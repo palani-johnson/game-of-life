@@ -2,25 +2,33 @@
 /* File:     cuda_game.cu
  *
  * Compile:  nvcc cuda_game.cu game.c -o cuda_game
- * Run:      ./game [threads] [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
+ * Run:      ./cuda_game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
  * Examples: 
  *      Gen 1000x1000 game board with seed 50 and fill 50 and save as game.ppm:
- *           ./omp_game 16 rand 1000 1000 10 50 600 > game.ppm
+ *           ./cuda_game rand 1000 1000 10 50 600 > game.ppm
  *     
  *      View ppm:
  *           mpv --no-correct-pts --fps=60 game.ppm
  *      
  *      Stream game with pipe into mpv:
- *          ./omp_game 16 rand 1000 1000 10 50 600 | mpv --no-correct-pts --fps=10 -
+ *          ./cuda_game rand 1000 1000 10 50 600 | mpv --no-correct-pts --fps=10 -
  */
-#include "game_of_life.h"
+extern "C" {
+    #include "game_of_life.h"
+}
 
-__device__ int width;
+#define cuda_pos(i, j) int i = blockIdx.x * blockDim.x + threadIdx.x;\
+    int j = blockIdx.y * blockDim.y + threadIdx.y
+
+#define error_if(check, msg, val) if (check) { fprintf(stderr, msg, val); exit(EXIT_FAILURE); } 
+
+// this number is implementation specific. change accordingly
+#define CUDA_NUM 16
 
 // Copies data into the extra space of a life buffer so that
 // it has the topology of a torus
-void make_torus(struct GameOfLife *life) {
+__global__ void make_torus(struct GameOfLife *life) {
     int wm1 = life->width-1;
     int hm1 = life->height-1;
     int bm1 = life->buff_size-1;
@@ -43,8 +51,7 @@ void make_torus(struct GameOfLife *life) {
 
 // Uses cuda to compute a life buffer.
 __global__ void cuda_gen_next_buff(struct GameOfLife *life) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    cuda_pos(i, j);
 
     int sum = 0;
     for (int h = j-1; h <= j+1; h++)
@@ -57,33 +64,45 @@ __global__ void cuda_gen_next_buff(struct GameOfLife *life) {
 
 // Uses cuda to fill a video buffer.
 __global__ void cuda_write_video_buffer(struct GameOfLife *life) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    cuda_pos(i, j);
 
-    int i3;
-    int jh;
+    int jh = j * (life->height) * 3;
+    int i3 = i*3;
 
     char b = life->buff[game_pos(life, i, j)] ? 0 : 255;
     for(int c = 0; c < 3; c++) life->vid_buff[i3 + jh + c] = b;
 }
 
-void cuda_init_life(
-    struct GameOfLife *life,
-    struct GameOfLife *cuda_life
-) {
-    // allocate the struct
-    cudaMalloc((void **)&cuda_life, sizeof(GameOfLife));
-
-    // copy data from struct (pointers will be bad but thats ok for now)
-    cudaMemcpy(cuda_life, life, sizeof(GameOfLife), cudaMemcpyHostToDevice); 
+struct GameOfLife *cuda_init_life(struct GameOfLife *life, struct GameOfLife *cuda_life_h) {
+    memcpy(cuda_life_h, life, sizeof(GameOfLife));
 
     // allocate the buffers
-    cudaMalloc((void **)&cuda_life->buff, life->buff_size);
-    cudaMalloc((void **)&cuda_life->next_buff, life->buff_size);
-    cudaMalloc((void **)&cuda_life->vid_buff, life->width * life->height * sizeof(char) * 3);
+    cudaMalloc(&(cuda_life_h->buff), life->buff_size * sizeof(bool));
+    cudaMalloc(&(cuda_life_h->next_buff), life->buff_size * sizeof(bool));
+    cudaMalloc(&(cuda_life_h->vid_buff), life->vid_buff_size * sizeof(char));
 
     // copy buffer
-    cudaMemcpy(cuda_life->buff, life->buff, life->buff_size, cudaMemcpyHostToDevice); 
+    cudaMemcpy(cuda_life_h->buff, life->buff, life->buff_size, cudaMemcpyHostToDevice);
+
+    // make the data struct
+    struct GameOfLife *cuda_life_d;
+    cudaMalloc(&cuda_life_d, sizeof(GameOfLife)); 
+    cudaMemcpy(cuda_life_d, cuda_life_h, sizeof(GameOfLife), cudaMemcpyHostToDevice);
+
+    return cuda_life_d;
+}
+
+void ppm_write_from_cuda(struct GameOfLife *life, struct GameOfLife *cuda_life, FILE *f) {
+    cudaMemcpy(
+        life->vid_buff, 
+        cuda_life->vid_buff, 
+        life->vid_buff_size * sizeof(char), 
+        cudaMemcpyDeviceToHost
+    );
+
+    fprintf(f, "P6\n%d %d 255\n", life->width, life->height);
+    fwrite(life->vid_buff, sizeof(char), life->vid_buff_size, f);
+    fflush(f);
 }
 
 int main(int argc, char** argv) {
@@ -96,38 +115,45 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     };
 
-    struct GameOfLife life_struct, *life, *cuda_life;
+    struct GameOfLife life_struct, *life, *cuda_life_d, cuda_life_h_struct, *cuda_life_h;
     life = &life_struct;
+    cuda_life_h = &cuda_life_h_struct;
+
+    int iterations = strtol(argv[6], NULL, 10);
+    int width = strtol(argv[2], NULL, 10);
+    int height = strtol(argv[3], NULL, 10);
+
+    error_if(width < CUDA_NUM, "Width must be >= %d\n", CUDA_NUM)
+    error_if(height < CUDA_NUM, "Height must be >= %d\n", CUDA_NUM)
+    error_if(width % CUDA_NUM != 0, "Width mod %d must be 0\n", CUDA_NUM)
+    error_if(height % CUDA_NUM != 0, "Height mod %d must be 0\n", CUDA_NUM)
+    
+    dim3 threads(CUDA_NUM, CUDA_NUM);
+    dim3 blocks(width/CUDA_NUM, height/CUDA_NUM);
 
     init_life(
         life,
         argv[1], 
-        strtol(argv[2], NULL, 10), 
-        strtol(argv[3], NULL, 10),
+        width, 
+        height,
         strtol(argv[4], NULL, 10),
         strtol(argv[5], NULL, 10)
     );
 
-    cuda_init_life(life, cuda_life);
+    cuda_life_d = cuda_init_life(life, cuda_life_h);
 
-    // // setup cuda
-    // char *cuda_vid_buff;
-    // bool *cuda_buff, *cuda_next_buff;
+    cuda_write_video_buffer<<<blocks, threads>>>(cuda_life_d);
+    ppm_write_from_cuda(life, cuda_life_h, stdout);
 
-    // cuda_init_life(life, cuda_vid_buff, cuda_buff, cuda_vid_buff)
+    for (int i = 0; i < iterations; i++) {
+        //make_torus(cuda_life_h);
+        cuda_gen_next_buff<<<blocks, threads>>>(cuda_life_d);
+        iterate_buff(cuda_life_h);
+        cudaMemcpy(cuda_life_d, cuda_life_h, sizeof(GameOfLife), cudaMemcpyHostToDevice);
 
-    // write_video_buffer(life, vid_buff);
-    // ppm_write(life, stdout, vid_buff);
-
-    // for (int i = 0; i < strtol(argv[6], NULL, 10); i++) {
-    //     make_torus(life);
-    //     gen_next_buff(life);
-    //     iterate_buff(life);
-    //     write_video_buffer(life, vid_buff);  
-    //     ppm_write(life, stdout, vid_buff);
-    // }
-
-    // free_buffs(life);
+        cuda_write_video_buffer<<<blocks, threads>>>(cuda_life_d); 
+        ppm_write_from_cuda(life, cuda_life_h, stdout);
+    }
 
     return EXIT_SUCCESS;
 }
