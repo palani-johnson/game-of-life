@@ -3,3 +3,5 @@ initial
 game
 game.ppm
 omp_game
+cuda_game
+mpi_game
