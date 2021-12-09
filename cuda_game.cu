@@ -26,29 +26,6 @@ extern "C" {
 // this number is implementation specific. change accordingly
 #define CUDA_NUM 16
 
-// Copies data into the extra space of a life buffer so that
-// it has the topology of a torus
-__global__ void make_torus(struct GameOfLife *life) {
-    int wm1 = life->width-1;
-    int hm1 = life->height-1;
-    int bm1 = life->buff_size-1;
-
-    for (int j = 0; j < life->height; j++) {
-        life->buff[game_pos(life, life->width, j)] = life->buff[game_pos(life, 0, j)];
-        life->buff[game_pos(life, -1, j)] = life->buff[game_pos(life, wm1, j)];
-    }
-
-    for (int i = 0; i < life->width; i++) {
-        life->buff[game_pos(life, i, life->height)] = life->buff[game_pos(life, i, 0)];
-        life->buff[game_pos(life, i, -1)] = life->buff[game_pos(life, i, hm1)];
-    }
-
-    life->buff[bm1] = life->buff[game_pos(life, 0, 0)];
-    life->buff[0] = life->buff[game_pos(life, wm1, hm1)];
-    life->buff[life->width + 1] = life->buff[game_pos(life, 0, hm1)];
-    life->buff[bm1 - (life->width + 1)] = life->buff[game_pos(life, wm1, 0)];
-}
-
 // Uses cuda to compute a life buffer.
 __global__ void cuda_gen_next_buff(struct GameOfLife *life) {
     cuda_pos(i, j);
@@ -148,7 +125,6 @@ int main(int argc, char** argv) {
     if (DO_IO) ppm_write_from_cuda(life, cuda_life_h, stdout);
 
     for (int i = 0; i < iterations; i++) {
-        if (DO_TORIS) make_torus(cuda_life_h);
         cuda_gen_next_buff<<<blocks, threads>>>(cuda_life_d);
         iterate_buff(cuda_life_h);
         cudaMemcpy(cuda_life_d, cuda_life_h, sizeof(GameOfLife), cudaMemcpyHostToDevice);
