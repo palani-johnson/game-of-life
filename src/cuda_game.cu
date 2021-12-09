@@ -43,7 +43,7 @@ __global__ void cuda_gen_next_buff(struct GameOfLife *life) {
 __global__ void cuda_write_video_buffer(struct GameOfLife *life) {
     cuda_pos(i, j);
 
-    int jh = j * (life->height) * 3;
+    int jh = j * (life->width) * 3;
     int i3 = i*3;
 
     char b = life->buff[game_pos(life, i, j)] ? 0 : 255;

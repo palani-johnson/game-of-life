@@ -59,7 +59,7 @@ void write_video_buffer(struct GameOfLife *life) {
     int i, j, b, c, jh, i3;
 
     for (j = 0; j < life->height; j++) {
-        jh = j * (life->height) * 3;
+        jh = j * (life->width) * 3;
         for (i = 0; i < life->width; i++) {
             i3 = i*3;
             b = life->buff[game_pos(life, i, j)] ? 0 : 255;

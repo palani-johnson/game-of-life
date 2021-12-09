@@ -76,7 +76,7 @@ void life_calc_derived(struct GameOfLife *life, int width, int height) {
     life->height = height;
     life->buff_size = (life->width + 2) * (life->height + 2);
     life->_w2 = life->width + 2;
-    life->_w3 = life->height + 3;
+    life->_w3 = life->width + 3;
     life->vid_buff_size = life->width * life->height * 3;
 }
 

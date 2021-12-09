@@ -34,6 +34,6 @@
     void life_alloc_buffs(struct GameOfLife *life);
 
 
-    #define DO_TORIS true
+    #define DO_TORIS false
     #define DO_IO true
 #endif

@@ -2,7 +2,7 @@
 /* File:     omp_game.c
  *
  * Compile:  gcc -g -Wall -fopenmp -o build/omp_game game.c omp_game.c
- * Run:      ./game [threads] [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
+ * Run:      ./build/omp_game [threads] [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
  * Examples: 
  *      Gen 512x512 game board with seed 50 and fill 50 and save as game.ppm:
@@ -65,7 +65,7 @@ void omp_write_video_buffer(struct GameOfLife *life) {
 
     #pragma omp for
     for (j = 0; j < life->height; j++) {
-        jh = j*life->height*3;
+        jh = j*life->width*3;
         for (i = 0; i < life->width; i++) {
             i3 = i*3;
             b = life->buff[game_pos(life, i, j)] ? 0 : 255;

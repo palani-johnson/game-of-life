@@ -11,7 +11,7 @@
  *           mpv --no-correct-pts --fps=60 output/game.ppm
  *      
  *      Stream game with pipe into mpv:
- *          mpiexec -n 8 ./mpi_game rand  rand 512 512 50 50 600 | mpv --no-correct-pts --fps=60 -
+ *          mpiexec -n 8 ./build/mpi_game rand 512 512 50 50 600 | mpv --no-correct-pts --fps=60 -
  */
 #include <mpi.h>
 #include "game_of_life.h"
@@ -68,7 +68,7 @@ void write_video_buffer(struct GameOfLife *life) {
     int i, j, b, c, jh, i3;
 
     for (j = 0; j < life->height; j++) {
-        jh = j * (life->height) * 3;
+        jh = j * (life->width) * 3;
         for (i = 0; i < life->width; i++) {
             i3 = i*3;
             b = life->buff[game_pos(life, i, j)] ? 0 : 255;
@@ -80,7 +80,7 @@ void write_video_buffer(struct GameOfLife *life) {
 void copy_to_mini_life(struct GameOfLife *life, struct GameOfLife *mini_life) {
     memcpy(
         mini_life->buff, 
-        &(life->buff[game_pos(life, (THIS_PROCESS*mini_life->height) - 1, -1)]),
+        &(life->buff[game_pos(life, -1, -1)]),
         mini_life->buff_size * sizeof(bool)
     );
 }
@@ -135,18 +135,20 @@ int main(int argc, char** argv) {
     copy_to_mini_life(life, mini_life);    
 
     write_video_buffer(mini_life);
-    printf("rank %d %d %d\n", THIS_PROCESS, mini_life->vid_buff_size, life->vid_buff_size);
+
     MPI_Gather(
         mini_life->vid_buff,
         mini_life->vid_buff_size, 
         MPI_CHAR,
         life->vid_buff,
-        life->vid_buff_size,
+        mini_life->vid_buff_size,
         MPI_CHAR,
         0,
         MPI_COMM_WORLD
     );
-    //if(THIS_PROCESS == 0 && DO_IO) ppm_write(life, stdout);
+    if(THIS_PROCESS == 0 && DO_IO) 
+        for (int i = 0; i < 20; i++) ppm_write(mini_life, stdout);
+
 
     // for (int i = 0; i < life_items[3]; i++) {
     //     gen_next_buff(mini_life);
