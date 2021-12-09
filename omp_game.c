@@ -1,18 +1,18 @@
 
 /* File:     omp_game.c
  *
- * Compile:  gcc -g -Wall -fopenmp -o game game.c omp_game.c
+ * Compile:  gcc -g -Wall -fopenmp -o build/omp_game game.c omp_game.c
  * Run:      ./game [threads] [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
  * Examples: 
- *      Gen 1000x1000 game board with seed 50 and fill 50 and save as game.ppm:
- *           ./omp_game 16 rand 1000 1000 10 50 600 > game.ppm
+ *      Gen 512x512 game board with seed 50 and fill 50 and save as game.ppm:
+ *           ./build/omp_game 16 rand 512 512 50 50 600 > output/game.ppm
  *     
  *      View ppm:
- *           mpv --no-correct-pts --fps=60 game.ppm
+ *           mpv --no-correct-pts --fps=60 output/game.ppm
  *      
  *      Stream game with pipe into mpv:
- *          ./omp_game 16 rand 1000 1000 10 50 600 | mpv --no-correct-pts --fps=10 -
+ *          ./build/omp_game 16 rand 512 512 50 50 600 | mpv --no-correct-pts --fps=60 -
  */
 #include <omp.h>
 #include "game_of_life.h"
@@ -75,8 +75,6 @@ void omp_write_video_buffer(struct GameOfLife *life) {
 }
 
 int main(int argc, char** argv) {
-    get_env;
-
     if (argc != 8) {
         fprintf(
             stderr, 

@@ -1,17 +1,17 @@
 /* File:     serial_game.c
  *
- * Compile:  gcc -g -Wall -o game game.c serial_game.c
- * Run:      ./game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
+ * Compile:  gcc -g -Wall -o build/serial_game game.c serial_game.c
+ * Run:      ./build/serial_game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
  * Examples: 
- *      Gen 500x500 game board with seed 50 and fill 50 and save as game.ppm:
- *           ./game rand 500 500 10 50 600 > game.ppm
+ *      Gen 256x256 game board with seed 50 and fill 50 and save as game.ppm:
+ *           ./build/serial_game rand 256 256 50 50 600 > output/game.ppm
  *     
- *      View ppm:
- *           mpv --no-correct-pts --fps=10 game.ppm
+ *      View ppm (I use mpv):
+ *           mpv --no-correct-pts --fps=60 output/game.ppm
  *      
  *      Stream game with pipe into mpv:
- *          ./game rand 500 500 10 50 600 | mpv --no-correct-pts --fps=10 -
+ *          ./build/serial_game rand 256 256 10 50 600 | mpv --no-correct-pts --fps=60 -
  */
 #include "game_of_life.h"
 
@@ -69,8 +69,6 @@ void write_video_buffer(struct GameOfLife *life) {
 }
 
 int main(int argc, char** argv) {
-    get_env;
-
     if (argc != 7) {
         fprintf(
             stderr, 

@@ -1,18 +1,18 @@
 
 /* File:     cuda_game.cu
  *
- * Compile:  nvcc cuda_game.cu game.c -o cuda_game
- * Run:      ./cuda_game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
+ * Compile:  nvcc cuda_game.cu game.c -o build/cuda_game
+ * Run:      ./build/cuda_game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
  * Examples: 
- *      Gen 1000x1000 game board with seed 50 and fill 50 and save as game.ppm:
- *           ./cuda_game rand 1000 1000 10 50 600 > game.ppm
+ *      Gen 1024x1024 game board with seed 50 and fill 50 and save as game.ppm:
+ *           ./build/cuda_game rand 1024 1024 50 50 600 > output/game.ppm
  *     
  *      View ppm:
- *           mpv --no-correct-pts --fps=60 game.ppm
+ *           mpv --no-correct-pts --fps=60 output/game.ppm
  *      
  *      Stream game with pipe into mpv:
- *          ./cuda_game rand 1000 1000 10 50 600 | mpv --no-correct-pts --fps=10 -
+ *          ./build/cuda_game rand 1024 1024 50 50 600 | mpv --no-correct-pts --fps=60 -
  */
 extern "C" {
     #include "game_of_life.h"
@@ -83,8 +83,6 @@ void ppm_write_from_cuda(struct GameOfLife *life, struct GameOfLife *cuda_life, 
 }
 
 int main(int argc, char** argv) {
-    get_env;
-
     if (argc != 7) {
         fprintf(
             stderr, 

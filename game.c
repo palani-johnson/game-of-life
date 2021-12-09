@@ -30,28 +30,22 @@ void ppm_write(struct GameOfLife *life, FILE *f) {
 // LIFE FUNCTIONS
 
 // Allocates random data to a life struct buffer
-bool *alloc_random_buff(struct GameOfLife *life, int seed, int fill) {
-    bool *buff;
-    buff = calloc(life->buff_size, sizeof(bool));
-
+void fill_random_buff(struct GameOfLife *life, int seed, int fill) {
     if (seed == -1) {
         for (int i = 0; i < 3; i++) 
-            buff[game_pos(life, i, 1)] = 1;
+            life->buff[game_pos(life, i, 1)] = 1;
     } else {
         srand(seed);
         for (int j = 0; j < life->height; j++) 
             for (int i = 0; i < life->width; i++)
-                buff[game_pos(life, i, j)] = (rand() / (double)RAND_MAX) 
+                life->buff[game_pos(life, i, j)] = (rand() / (double)RAND_MAX) 
                     < (double)fill / 100;
     }
-
-    return buff;
 }
 
 // TODO: Make this function
-bool *alloc_buff_from_file(struct GameOfLife *life, char *file, int seed, int fill) {
-    bool *buff = calloc(life->buff_size, sizeof(bool));
-    return buff;
+void fill_buff_from_file(struct GameOfLife *life, char *file, int seed, int fill) {
+
 }
 
 // Fills a life struct with useful data
@@ -63,19 +57,27 @@ void init_life(
     int op1, 
     int op2
 ) {
+    life_calc_derived(life, width, height);
+    life_alloc_buffs(life);
+    
+    if (strcmp(init_type, "random") || strcmp(init_type, "rand")) 
+        fill_random_buff(life, op1, op2);
+    else fill_buff_from_file(life, init_type, op1, op2);
+}
+
+void life_alloc_buffs(struct GameOfLife *life) {
+    life->next_buff = malloc(life->buff_size * sizeof(bool));
+    life->buff = calloc(life->buff_size, sizeof(bool));
+    life->vid_buff = malloc(life->vid_buff_size * sizeof(char));
+}
+
+void life_calc_derived(struct GameOfLife *life, int width, int height) {
     life->width = width;
     life->height = height;
     life->buff_size = (life->width + 2) * (life->height + 2);
     life->_w2 = life->width + 2;
     life->_w3 = life->height + 3;
-
-    life->next_buff = malloc(life->buff_size * sizeof(bool));
-    life->buff = strcmp(init_type, "random") || strcmp(init_type, "rand")
-        ? alloc_random_buff(life, op1, op2)
-        : alloc_buff_from_file(life, init_type, op1, op2);
-    
     life->vid_buff_size = life->width * life->height * 3;
-    life->vid_buff = malloc(life->vid_buff_size * sizeof(char));
 }
 
 // Make the next buffer the current buffer in a life struct

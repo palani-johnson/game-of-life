@@ -1,17 +1,17 @@
 /* File:     mpi_game.c
  *
- * Compile:  mpicc -g -Wall -o mip_game game.c mpi_game.c
- * Run:      ./mpi_game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
+ * Compile:  mpicc -g -Wall -o build/mpi_game game.c mpi_game.c
+ * Run:      mpiexec -n [processes] ./build/mpi_game [random|rand] [board_width] [board_height] [seed] [fill] [iterations]
  * 
  * Examples: 
- *      Gen 500x500 game board with seed 50 and fill 50 and save as game.ppm:
- *           ./mpi_game rand 500 500 10 50 600 > game.ppm
+ *      Gen 512x512 game board with seed 50 and fill 50 and save as game.ppm:
+ *           mpiexec -n 8 ./build/mpi_game rand 512 512 50 50 600 > output/game.ppm
  *     
  *      View ppm:
- *           mpv --no-correct-pts --fps=10 game.ppm
+ *           mpv --no-correct-pts --fps=60 output/game.ppm
  *      
  *      Stream game with pipe into mpv:
- *          ./mpi_game rand 500 500 10 50 600 | mpv --no-correct-pts --fps=10 -
+ *          mpiexec -n 8 ./mpi_game rand  rand 512 512 50 50 600 | mpv --no-correct-pts --fps=60 -
  */
 #include <mpi.h>
 #include "game_of_life.h"
@@ -77,38 +77,23 @@ void write_video_buffer(struct GameOfLife *life) {
     }
 }
 
-void mpi_init_life(
-    struct GameOfLife *life, 
-    int init_type, 
-    int width, 
-    int height, 
-    int op1, 
-    int op2
-) {
-    life->width = width;
-    life->height = height;
-    life->buff_size = (life->width + 2) * (life->height + 2);
-    life->_w2 = life->width + 2;
-    life->_w3 = life->height + 3;
-
-    life->next_buff = malloc(life->buff_size * sizeof(bool));
-    if(THIS_PROCESS == 0)
-        life->buff = init_type
-            ? alloc_random_buff(life, op1, op2)
-            : alloc_buff_from_file(life, init_type, op1, op2);
-    
-    life->vid_buff_size = life->width * life->height * 3;
-    life->vid_buff = malloc(life->vid_buff_size * sizeof(char));
+void copy_to_mini_life(struct GameOfLife *life, struct GameOfLife *mini_life) {
+    memcpy(
+        mini_life->buff, 
+        &(life->buff[game_pos(life, (THIS_PROCESS*mini_life->height) - 1, -1)]),
+        mini_life->buff_size * sizeof(bool)
+    );
 }
 
 int main(int argc, char** argv) {
-    get_env;
-    
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &PROCESSES);
     MPI_Comm_rank(MPI_COMM_WORLD, &THIS_PROCESS);
 
-    int argi[6];
+    struct GameOfLife life_struct, *life, mini_life_struct, *mini_life;
+    life = &life_struct;
+    mini_life = &mini_life_struct;
+    int life_items[3];
 
     if(THIS_PROCESS == 0) {
         error_if(
@@ -116,44 +101,82 @@ int main(int argc, char** argv) {
             "usage:  %s [random|rand] [board_width] [board_height] [seed] [fill] [iterations]\n",
             argv[0]
         )
-        argi[0] = strcmp(argv[1], "random") || strcmp(argv[0], "rand");
-        argi[1] = strtol(argv[2], NULL, 10);
-        argi[2] = strtol(argv[3], NULL, 10);
-        argi[3] = strtol(argv[4], NULL, 10);
-        argi[4] = strtol(argv[5], NULL, 10);
-        argi[5] = strtol(argv[6], NULL, 10);
 
-        error_if(argi[1] % PROCESSES == 0, "Width mod %d (processes) must be 0", PROCESSES)
-        error_if(argi[2] % PROCESSES == 0, "Height mod %d (processes) must be 0", PROCESSES)
+        life_items[0] = strtol(argv[2], NULL, 10);
+        life_items[1] = strtol(argv[2], NULL, 10);
+        life_items[2] = strtol(argv[6], NULL, 10);
+
+        error_if(
+            life_items[1] % PROCESSES != 0, 
+            "Height mod %d (processes) must be 0", 
+            PROCESSES
+        )
+
+        init_life(
+            life,
+            argv[1], 
+            life_items[0], 
+            life_items[1],
+            strtol(argv[4], NULL, 10),
+            strtol(argv[5], NULL, 10)
+        );
     }
 
-    MPI_Bcast(&argi, 6, MPI_INT, 0, MPI_COMM_WORLD);
-    
-    struct GameOfLife life_struct, *life;
-    life = &life_struct;
+    MPI_Bcast(life_items, 3, MPI_INT, 0, MPI_COMM_WORLD);
 
-    mpi_init_life(life, argi[0], argi[1], argi[2], argi[3], argi[4]);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    write_video_buffer(life);
-    MPI_Barrier(MPI_COMM_WORLD);
-    if(THIS_PROCESS == 0 && DO_IO) ppm_write(life, stdout);
-
-    for (int i = 0; i < argi[5]; i++) {
-        if (DO_TORIS) make_torus(life);
-
-        gen_next_buff(life);
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        if (THIS_PROCESS == 0) iterate_buff(life);
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        write_video_buffer(life);
-        MPI_Barrier(MPI_COMM_WORLD);
-        if(THIS_PROCESS == 0 && DO_IO) ppm_write(life, stdout);
+    life_calc_derived(mini_life, life_items[0], life_items[1] / PROCESSES);
+    life_alloc_buffs(mini_life);
+    if(THIS_PROCESS != 0) {
+        life_calc_derived(life, life_items[0], life_items[1]);
+        life_alloc_buffs(life);
+        free(life->vid_buff);
     }
+    MPI_Bcast(life->buff, life->buff_size, MPI_BYTE, 0, MPI_COMM_WORLD);
+    copy_to_mini_life(life, mini_life);    
 
-    free_buffs(life);
+    write_video_buffer(mini_life);
+    printf("rank %d %d %d\n", THIS_PROCESS, mini_life->vid_buff_size, life->vid_buff_size);
+    MPI_Gather(
+        mini_life->vid_buff,
+        mini_life->vid_buff_size, 
+        MPI_CHAR,
+        life->vid_buff,
+        life->vid_buff_size,
+        MPI_CHAR,
+        0,
+        MPI_COMM_WORLD
+    );
+    //if(THIS_PROCESS == 0 && DO_IO) ppm_write(life, stdout);
+
+    // for (int i = 0; i < life_items[3]; i++) {
+    //     gen_next_buff(mini_life);
+    //     MPI_Allgather(
+    //         &(mini_life->buff[game_pos(mini_life, 0, -1)]),
+    //         mini_life->buff_size - (mini_life->width - 2) * 2, 
+    //         MPI_CHAR,
+    //         &(life->buff[game_pos(life, 0, -1)]),
+    //         life->buff_size - (life->width - 2) * 2,
+    //         MPI_CHAR,
+    //         MPI_COMM_WORLD
+    //     );
+    //     copy_to_mini_life(life, mini_life);
+
+    //     write_video_buffer(mini_life);
+    //     MPI_Gather(
+    //         mini_life->vid_buff,
+    //         mini_life->vid_buff_size, 
+    //         MPI_CHAR,
+    //         life->vid_buff,
+    //         life->vid_buff_size,
+    //         MPI_CHAR,
+    //         0,
+    //         MPI_COMM_WORLD
+    //     );
+    //     //if(THIS_PROCESS == 0 && DO_IO) ppm_write(life, stdout);
+    // }
+
+    // free_buffs(life);
+    //free_buffs(mini_life);
     MPI_Finalize();
 
     return EXIT_SUCCESS;
