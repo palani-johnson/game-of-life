@@ -29,4 +29,6 @@ The solution I found for this problem was incresing the size of the width and he
 
 The next issue I came accros was an I/O bottleneck. Initialy I was writing the bytes one at a time and periodicly flusing. This, of course, was exceptionaly slow. I eventualy found that writing the bytes to an intermediate video buffer and then using `fwrite` to write them all at once was much faster and completly overcame the I/O bottleneck.
 
+Below are some of the timing plots for this implementation. All the timing studies that are contained here were run on my laptop with an 8 core, 16 thread Intel i7-10875H 2.300GH cpu and a NVIDIA Quadro RTX 5000 Mobile gpu.
+
 ### Shared memory approach with OpenMP: `omp_game.c`
