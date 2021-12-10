@@ -6,6 +6,7 @@
     #include <stdlib.h>
     #include <stdbool.h>
     #include <string.h>
+    #include "timer.h"
 
     struct GameOfLife {
         // main values for game of life
@@ -36,4 +37,15 @@
 
     #define DO_TORIS false
     #define DO_IO true
+    #define DO_TIME false
+
+    #define setup_timer() double start, finish, elapsed; \
+        if(DO_TIME) GET_TIME(start)
+    
+    #define close_timer() if(DO_TIME) GET_TIME(finish)
+
+    #define report_timer() if(DO_TIME) { \
+        elapsed = finish - start; \
+        fprintf(stderr, "%f,\n", elapsed); \
+    }
 #endif

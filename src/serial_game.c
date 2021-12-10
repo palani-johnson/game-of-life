@@ -69,6 +69,8 @@ void write_video_buffer(struct GameOfLife *life) {
 }
 
 int main(int argc, char** argv) {
+    setup_timer();
+
     if (argc != 7) {
         fprintf(
             stderr, 
@@ -106,5 +108,7 @@ int main(int argc, char** argv) {
 
     free_buffs(life);
 
+    close_timer();
+    report_timer();
     return EXIT_SUCCESS;
 }

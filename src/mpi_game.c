@@ -64,6 +64,7 @@ void write_video_buffer(struct GameOfLife *life) {
 }
 
 int main(int argc, char** argv) {
+    setup_timer();
     int processes, this_process;
 
     MPI_Init(NULL, NULL);
@@ -118,5 +119,9 @@ int main(int argc, char** argv) {
 
     free_buffs(life);
     MPI_Finalize();
+    close_timer();
+    if(this_process == 0) {
+        report_timer();
+    }
     return EXIT_SUCCESS;
 }

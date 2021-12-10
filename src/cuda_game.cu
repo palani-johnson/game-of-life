@@ -83,6 +83,7 @@ void ppm_write_from_cuda(struct GameOfLife *life, struct GameOfLife *cuda_life, 
 }
 
 int main(int argc, char** argv) {
+    setup_timer();
     if (argc != 7) {
         fprintf(
             stderr, 
@@ -131,5 +132,7 @@ int main(int argc, char** argv) {
         if (DO_IO) ppm_write_from_cuda(life, cuda_life_h, stdout);
     }
 
+    close_timer();
+    report_timer();
     return EXIT_SUCCESS;
 }
