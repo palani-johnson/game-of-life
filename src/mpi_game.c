@@ -22,36 +22,11 @@
     MPI_Finalize(); \
     exit(EXIT_FAILURE); } 
 
-int PROCESSES, THIS_PROCESS;
-
-// Copies data into the extra space of a life buffer so that
-// it has the topology of a torus
-void make_torus(struct GameOfLife *life) {
-    int wm1 = life->width-1;
-    int hm1 = life->height-1;
-    int bm1 = life->buff_size-1;
-
-    for (int j = 0; j < life->height; j++) {
-        life->buff[game_pos(life, life->width, j)] = life->buff[game_pos(life, 0, j)];
-        life->buff[game_pos(life, -1, j)] = life->buff[game_pos(life, wm1, j)];
-    }
-
-    for (int i = 0; i < life->width; i++) {
-        life->buff[game_pos(life, i, life->height)] = life->buff[game_pos(life, i, 0)];
-        life->buff[game_pos(life, i, -1)] = life->buff[game_pos(life, i, hm1)];
-    }
-
-    life->buff[bm1] = life->buff[game_pos(life, 0, 0)];
-    life->buff[0] = life->buff[game_pos(life, wm1, hm1)];
-    life->buff[life->width + 1] = life->buff[game_pos(life, 0, hm1)];
-    life->buff[bm1 - (life->width + 1)] = life->buff[game_pos(life, wm1, 0)];
-}
-
 // Creates the next buffer in a life struct
-void gen_next_buff(struct GameOfLife *life) {
+void mpi_gen_next_buff(struct GameOfLife *life, int process, int step) {
     int i, j, w, h, sum, p;
 
-    for (j = 0; j < life->height; j++) {
+    for (j = process; j < life->height; j += step) {
         for (i = 0; i < life->width; i++) {
             sum = 0;
             for (h = j-1; h <= j+1; h++)
@@ -62,6 +37,17 @@ void gen_next_buff(struct GameOfLife *life) {
             life->next_buff[p] = sum == 3 || (life->buff[p] && sum == 4);
         }
     }
+}
+
+void mpi_iterate_buff(struct GameOfLife *life) {
+    MPI_Allreduce(
+        life->next_buff,
+        life->buff,
+        life->buff_size,
+        MPI_CHAR,
+        MPI_LOR,
+        MPI_COMM_WORLD
+    );
 }
 
 void write_video_buffer(struct GameOfLife *life) {
@@ -77,25 +63,18 @@ void write_video_buffer(struct GameOfLife *life) {
     }
 }
 
-void copy_to_mini_life(struct GameOfLife *life, struct GameOfLife *mini_life) {
-    memcpy(
-        mini_life->buff, 
-        &(life->buff[game_pos(life, -1, -1)]),
-        mini_life->buff_size * sizeof(bool)
-    );
-}
-
 int main(int argc, char** argv) {
-    MPI_Init(NULL, NULL);
-    MPI_Comm_size(MPI_COMM_WORLD, &PROCESSES);
-    MPI_Comm_rank(MPI_COMM_WORLD, &THIS_PROCESS);
+    int processes, this_process;
 
-    struct GameOfLife life_struct, *life, mini_life_struct, *mini_life;
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &processes);
+    MPI_Comm_rank(MPI_COMM_WORLD, &this_process);
+
+    struct GameOfLife life_struct, *life;
     life = &life_struct;
-    mini_life = &mini_life_struct;
     int life_items[3];
 
-    if(THIS_PROCESS == 0) {
+    if(this_process == 0) {
         error_if(
             argc != 7, 
             "usage:  %s [random|rand] [board_width] [board_height] [seed] [fill] [iterations]\n",
@@ -105,12 +84,6 @@ int main(int argc, char** argv) {
         life_items[0] = strtol(argv[2], NULL, 10);
         life_items[1] = strtol(argv[2], NULL, 10);
         life_items[2] = strtol(argv[6], NULL, 10);
-
-        error_if(
-            life_items[1] % PROCESSES != 0, 
-            "Height mod %d (processes) must be 0", 
-            PROCESSES
-        )
 
         init_life(
             life,
@@ -123,63 +96,27 @@ int main(int argc, char** argv) {
     }
 
     MPI_Bcast(life_items, 3, MPI_INT, 0, MPI_COMM_WORLD);
-
-    life_calc_derived(mini_life, life_items[0], life_items[1] / PROCESSES);
-    life_alloc_buffs(mini_life);
-    if(THIS_PROCESS != 0) {
+    if(this_process != 0) {
         life_calc_derived(life, life_items[0], life_items[1]);
         life_alloc_buffs(life);
-        free(life->vid_buff);
     }
     MPI_Bcast(life->buff, life->buff_size, MPI_BYTE, 0, MPI_COMM_WORLD);
-    copy_to_mini_life(life, mini_life);    
+    if(this_process == 0 && DO_IO) {
+        write_video_buffer(life);
+        ppm_write(life, stdout);
+    }
 
-    write_video_buffer(mini_life);
+    for (int i = 0; i < life_items[2]; i++) {
+        mpi_gen_next_buff(life, this_process, processes);
+        mpi_iterate_buff(life);
 
-    MPI_Gather(
-        mini_life->vid_buff,
-        mini_life->vid_buff_size, 
-        MPI_CHAR,
-        life->vid_buff,
-        mini_life->vid_buff_size,
-        MPI_CHAR,
-        0,
-        MPI_COMM_WORLD
-    );
-    if(THIS_PROCESS == 0 && DO_IO) 
-        for (int i = 0; i < 20; i++) ppm_write(mini_life, stdout);
+        if(this_process == 0 && DO_IO) {
+            write_video_buffer(life);
+            ppm_write(life, stdout);
+        }
+    }
 
-
-    // for (int i = 0; i < life_items[3]; i++) {
-    //     gen_next_buff(mini_life);
-    //     MPI_Allgather(
-    //         &(mini_life->buff[game_pos(mini_life, 0, -1)]),
-    //         mini_life->buff_size - (mini_life->width - 2) * 2, 
-    //         MPI_CHAR,
-    //         &(life->buff[game_pos(life, 0, -1)]),
-    //         life->buff_size - (life->width - 2) * 2,
-    //         MPI_CHAR,
-    //         MPI_COMM_WORLD
-    //     );
-    //     copy_to_mini_life(life, mini_life);
-
-    //     write_video_buffer(mini_life);
-    //     MPI_Gather(
-    //         mini_life->vid_buff,
-    //         mini_life->vid_buff_size, 
-    //         MPI_CHAR,
-    //         life->vid_buff,
-    //         life->vid_buff_size,
-    //         MPI_CHAR,
-    //         0,
-    //         MPI_COMM_WORLD
-    //     );
-    //     //if(THIS_PROCESS == 0 && DO_IO) ppm_write(life, stdout);
-    // }
-
-    // free_buffs(life);
-    //free_buffs(mini_life);
+    free_buffs(life);
     MPI_Finalize();
-
     return EXIT_SUCCESS;
 }

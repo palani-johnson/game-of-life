@@ -66,9 +66,9 @@ void init_life(
 }
 
 void life_alloc_buffs(struct GameOfLife *life) {
-    life->next_buff = malloc(life->buff_size * sizeof(bool));
+    life->next_buff = calloc(life->buff_size, sizeof(bool));
     life->buff = calloc(life->buff_size, sizeof(bool));
-    life->vid_buff = malloc(life->vid_buff_size * sizeof(char));
+    life->vid_buff = calloc(life->vid_buff_size, sizeof(char));
 }
 
 void life_calc_derived(struct GameOfLife *life, int width, int height) {
